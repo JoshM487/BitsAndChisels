@@ -1,42 +1,21 @@
 {
   "schemaVersion": 1,
   "id": "bitsandchisels",
-  "version": "2.7.3",
+  "version": "${version}",
   "name": "BitsAndChisels",
-  "description": "Turn Blocks Into Small Bits With Chisels; Build All The Things",
-  "authors": [
-    "cool_mineman"
-  ],
-  "contact": {
-    "homepage": "https://github.com/CoolMineman/BitsAndChisels",
-    "sources": "https://github.com/CoolMineman/BitsAndChisels"
-  },
+  "description": "A Minecraft 26.2 Fabric port of Bits And Chisels.",
+  "authors": ["cool_mineman", "26.2 port maintenance: JoshM487"],
   "license": "CC0-1.0",
   "icon": "assets/bitsandchisels/icon.png",
   "environment": "*",
   "entrypoints": {
-    "main": [
-      "io.github.coolmineman.bitsandchisels.BitsAndChisels"
-    ],
-    "client": [
-      "io.github.coolmineman.bitsandchisels.BitsBlockClient"
-    ],
-    "rei_client": [
-      "io.github.coolmineman.bitsandchisels.tellreistopbad.TellReiStopBad"
-    ]
-  },
-  "mixins": [
-    "bitsandchisels.mixins.json"
-  ],
-  "custom": {
-    "dashloader:customobject": [
-      "io.github.coolmineman.bitsandchisels.dashloader.DashBitsBlockModel",
-      "io.github.coolmineman.bitsandchisels.dashloader.DashBitItemModel"
-    ]
+    "main": ["io.github.coolmineman.bitsandchisels.BitsAndChisels"],
+    "client": ["io.github.coolmineman.bitsandchisels.client.BitsBlockClient"]
   },
   "depends": {
-    "fabricloader": ">=0.7.4",
-    "minecraft": "*"
-  },
-  "accessWidener": "b&c_ahhh.accesswidener"
+    "fabricloader": ">=0.19.3",
+    "fabric-api": ">=0.156.0",
+    "minecraft": "${minecraft_version}",
+    "java": ">=25"
+  }
 }

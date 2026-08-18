@@ -1,110 +1,51 @@
 package io.github.coolmineman.bitsandchisels.wrench;
 
-import io.github.coolmineman.bitsandchisels.BitsAndChisels;
+import io.github.coolmineman.bitsandchisels.BitUtils;
 import io.github.coolmineman.bitsandchisels.BitsBlockEntity;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.math.Direction.Axis;
+import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
-public class WrenchItem extends Item {
-
-    public WrenchItem(Settings settings) {
-        super(settings);
+public final class WrenchItem extends Item {
+    public WrenchItem(Properties properties) {
+        super(properties);
     }
 
     @Override
-    public ActionResult useOnBlock(ItemUsageContext context) {
-        if (!context.getWorld().isClient && context.getWorld().getBlockState(context.getBlockPos()).isOf(BitsAndChisels.BITS_BLOCK)) {
-            BlockEntity e1 = context.getWorld().getBlockEntity(context.getBlockPos());
-            if (e1 instanceof BitsBlockEntity) {
-                BitsBlockEntity e = (BitsBlockEntity) e1;
-                if (context.getPlayer().isSneaking()){
-                    invert(context.getSide().getAxis(), e);
-                }
-                else {
-                    rotate(context.getSide().getAxis(), e);
-                }
+    public InteractionResult useOn(UseOnContext context) {
+        if (context.getLevel().isClientSide()) return InteractionResult.SUCCESS;
+        BitsBlockEntity bits = BitUtils.getBits(context.getLevel(), context.getClickedPos());
+        if (bits == null) return InteractionResult.PASS;
 
-                return ActionResult.SUCCESS;
+        boolean mirror = context.getPlayer() != null && context.getPlayer().isShiftKeyDown();
+        transform(bits, context.getClickedFace().getAxis(), mirror);
+        return InteractionResult.SUCCESS;
+    }
+
+    private static void transform(BitsBlockEntity bits, Direction.Axis axis, boolean mirror) {
+        BlockState[] source = bits.copyBits();
+        BlockState[] target = new BlockState[BitsBlockEntity.COUNT];
+        java.util.Arrays.fill(target, Blocks.AIR.defaultBlockState());
+        for (int x = 0; x < 16; x++) for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) {
+            int nx = x, ny = y, nz = z;
+            if (mirror) {
+                switch (axis) {
+                    case X -> nx = 15 - x;
+                    case Y -> ny = 15 - y;
+                    case Z -> nz = 15 - z;
+                }
+            } else {
+                switch (axis) {
+                    case X -> { ny = z; nz = 15 - y; }
+                    case Y -> { nx = z; nz = 15 - x; }
+                    case Z -> { nx = y; ny = 15 - x; }
+                }
             }
+            target[(ny * 256) + (nz * 16) + nx] = source[(y * 256) + (z * 16) + x];
         }
-        return ActionResult.PASS;
+        bits.replaceAll(target);
     }
-    void invert(Axis axis, BitsBlockEntity e) {
-        BlockState[][][] rotated = new BlockState[16][16][16];
-        switch(axis) {
-            case X:
-                for (int i = 0; i < 16; i++) {
-                    for (int j = 0; j < 16; j++) {
-                        for (int k = 0; k < 16; k++) {
-                            rotated[i][j][k] = e.getState(i, j, -k+15);
-                        }
-                    }
-                }
-                break;
-            case Y:
-                for (int i = 0; i < 16; i++) {
-                    for (int j = 0; j < 16; j++) {
-                        for (int k = 0; k < 16; k++) {
-                            rotated[i][j][k] = e.getState( i, -j+15,k);
-                        }
-                    }
-                }
-                break;
-            case Z:
-                for (int i = 0; i < 16; i++) {
-                    for (int j = 0; j < 16; j++) {
-                        for (int k = 0; k < 16; k++) {
-                            rotated[i][j][k] = e.getState(-i+15, j, k);
-                        }
-                    }
-                }
-                break;
-        }
-        e.setStates(rotated);
-        e.rebuildServer();
-        e.sync();
-    }
-
-
-    //Rotation Algorithm from https://stackoverflow.com/questions/53110374/how-to-rotate-2-d-array-in-java, extended to 3D
-    void rotate(Axis axis, BitsBlockEntity e) {
-        BlockState[][][] rotated = new BlockState[16][16][16];
-        switch(axis) {
-            case X:
-                for (int i = 0; i < 16; i++) {
-                    for (int j = 0; j < 16; j++) {
-                        for (int k = 0; k < 16; k++) {
-                            rotated[i][j][k] = e.getState(i, 16 - k - 1, j);
-                        }
-                    }
-                }
-                break;
-            case Y:
-                for (int i = 0; i < 16; i++) {
-                    for (int j = 0; j < 16; j++) {
-                        for (int k = 0; k < 16; k++) {
-                            rotated[i][j][k] = e.getState(16 - k - 1, j, i);
-                        }
-                    }
-                }
-                break;
-            case Z:
-                for (int i = 0; i < 16; i++) {
-                    for (int j = 0; j < 16; j++) {
-                        for (int k = 0; k < 16; k++) {
-                            rotated[i][j][k] = e.getState(16 - j - 1, i, k);
-                        }
-                    }
-                }
-                break;
-        }
-        e.setStates(rotated);
-        e.rebuildServer();
-        e.sync();
-    }
-    
 }
