@@ -26,6 +26,7 @@ public final class BitsBlockEntity extends BlockEntity {
     private final BlockState[] bits = new BlockState[COUNT];
     private VoxelShape cachedShape = Shapes.empty();
     private boolean shapeDirty = true;
+    private long renderRevision = 0L;
 
     public BitsBlockEntity(BlockPos pos, BlockState state) {
         super(BitsAndChisels.BITS_BLOCK_ENTITY, pos, state);
@@ -45,19 +46,26 @@ public final class BitsBlockEntity extends BlockEntity {
         if (!inside(x, y, z)) return;
         bits[index(x, y, z)] = state == null ? Blocks.AIR.defaultBlockState() : state;
         shapeDirty = true;
+        renderRevision++;
         setChanged();
     }
 
     public void fill(BlockState state) {
         Arrays.fill(bits, state);
         shapeDirty = true;
+        renderRevision++;
         setChanged();
     }
 
     public void replaceAll(BlockState[] states) {
         System.arraycopy(states, 0, bits, 0, Math.min(states.length, bits.length));
         shapeDirty = true;
+        renderRevision++;
         setChanged();
+    }
+
+    public long renderRevision() {
+        return renderRevision;
     }
 
     public BlockState[] copyBits() {
@@ -127,6 +135,7 @@ public final class BitsBlockEntity extends BlockEntity {
             bits[i] = paletteIndex >= 0 && paletteIndex < palette.size() ? palette.get(paletteIndex) : Blocks.AIR.defaultBlockState();
         }
         shapeDirty = true;
+        renderRevision++;
     }
 
     @Override
