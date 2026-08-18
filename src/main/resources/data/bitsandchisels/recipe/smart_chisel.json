@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "tools",
+  "pattern": ["R", "C", "D"],
+  "key": {
+    "C": "bitsandchisels:iron_chisel",
+    "D": "minecraft:diamond",
+    "R": "minecraft:redstone_block"
+  },
+  "result": {"id": "bitsandchisels:smart_chisel", "count": 1}
+}

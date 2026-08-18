@@ -1,175 +1,150 @@
 package io.github.coolmineman.bitsandchisels;
 
-import org.jetbrains.annotations.Nullable;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
-import io.github.coolmineman.bitsandchisels.mixin.SimpleVoxelShapeFactory;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.renderer.v1.mesh.Mesh;
-import net.fabricmc.fabric.api.rendering.data.v1.RenderAttachmentBlockEntity;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.network.listener.ClientPlayPacketListener;
-import net.minecraft.network.packet.Packet;
-import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.shape.BitSetVoxelSet;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.util.shape.VoxelShapes;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
-public class BitsBlockEntity extends BlockEntity implements RenderAttachmentBlockEntity {
-    private BlockState[][][] states;
-    @Environment(EnvType.CLIENT)
-    protected Mesh mesh;
-    protected VoxelShape shape = VoxelShapes.fullCube();
-    protected NbtCompound nbtCache;
-    private boolean alive = false;
+public final class BitsBlockEntity extends BlockEntity {
+    public static final int SIZE = 16;
+    public static final int COUNT = SIZE * SIZE * SIZE;
+    private final BlockState[] bits = new BlockState[COUNT];
+    private VoxelShape cachedShape = Shapes.empty();
+    private boolean shapeDirty = true;
 
     public BitsBlockEntity(BlockPos pos, BlockState state) {
-        this(Blocks.AIR.getDefaultState(), pos, state, false);
-    }
-
-    public BitsBlockEntity(BlockState fillState, BlockPos pos, BlockState state, boolean alive) {
-        this(new BlockState[16][16][16], pos, state, alive);
-        for (int i = 0; i < 16; i++) {
-            for (int j = 0; j < 16; j++) {
-                for (int k = 0; k < 16; k++) {
-                    states[i][j][k] = fillState;
-                }
-            }
-        }
-    }
-
-    public BitsBlockEntity(BlockState[][][] states, BlockPos pos, BlockState state, boolean alive) {
         super(BitsAndChisels.BITS_BLOCK_ENTITY, pos, state);
-        this.states = states;
-        this.alive = alive;
+        Arrays.fill(bits, Blocks.AIR.defaultBlockState());
     }
 
-    @Override
-    public void writeNbt(NbtCompound tag) {
-        super.writeNbt(tag);
-        if (!alive) return;
-        if (nbtCache == null) {
-            BitsAndChisels.LOGGER.error("NbtCache should not be null!");
-            BitNbtUtil.write3DBitArray(tag, states);
-        } else {
-            tag.copyFrom(nbtCache);
-        }
+    private static int index(int x, int y, int z) {
+        return (y * SIZE * SIZE) + (z * SIZE) + x;
     }
 
-    @Override
-    public void readNbt(NbtCompound tag) {
-        super.readNbt(tag);
-        BitNbtUtil.read3DBitArray(tag, states);
-        rebuildShape();
-        if (getWorld() != null && getWorld().isClient) {
-            postFromClientTag();
-        }
-        rebuildNbtCache();
-        alive = true;
-    }
-    
-    private void rebuildNbtCache() {
-        NbtCompound c = new NbtCompound();
-        BitNbtUtil.write3DBitArray(c, states);
-        nbtCache = c;
+    public BlockState get(int x, int y, int z) {
+        if (!inside(x, y, z)) return Blocks.AIR.defaultBlockState();
+        return bits[index(x, y, z)];
     }
 
-    public void setState(int x, int y, int z, BlockState state) {
-        states[x][y][z] = state;
-        alive = true;
+    public void set(int x, int y, int z, BlockState state) {
+        if (!inside(x, y, z)) return;
+        bits[index(x, y, z)] = state == null ? Blocks.AIR.defaultBlockState() : state;
+        shapeDirty = true;
+        setChanged();
     }
 
-    /**
-     * Used to replace the backing array, don't call this w/o a good reason.
-     */
-    public void setStates(BlockState[][][] states) {
-        this.states = states;
+    public void fill(BlockState state) {
+        Arrays.fill(bits, state);
+        shapeDirty = true;
+        setChanged();
     }
 
-    public void rebuildServer() {
-        rebuildShape();
-        rebuildNbtCache();
+    public void replaceAll(BlockState[] states) {
+        System.arraycopy(states, 0, bits, 0, Math.min(states.length, bits.length));
+        shapeDirty = true;
+        setChanged();
     }
 
-    public BlockState getState(int x, int y, int z) {
-        return states[x][y][z];
+    public BlockState[] copyBits() {
+        return bits.clone();
     }
 
-    public BlockState[][][] getStates() {
-        return states;
+    public boolean isEmpty() {
+        for (BlockState state : bits) if (!state.isAir()) return false;
+        return true;
     }
 
-    protected void rebuildShape() {
-        boolean fullcube = true;
-        BitSetVoxelSet set = new BitSetVoxelSet(16, 16, 16);
-        BlockState firststate = states[0][0][0];
-        int totalLight = 0;
-        for (int i = 0; i < 16; i++) {
-            for (int j = 0; j < 16; j++) {
-                for (int k = 0; k < 16; k++) {
-                    BlockState state = states[i][j][k];
-                    totalLight += state.getLuminance();
-                    if (!state.isAir()) {
-                        set.set(i, j, k);
-                    }
-                    if (firststate != state) {
-                        fullcube = false;
+    public int nonAirCount() {
+        int count = 0;
+        for (BlockState state : bits) if (!state.isAir()) count++;
+        return count;
+    }
+
+    public VoxelShape shape() {
+        if (!shapeDirty) return cachedShape;
+        VoxelShape result = Shapes.empty();
+        for (int y = 0; y < SIZE; y++) {
+            for (int z = 0; z < SIZE; z++) {
+                for (int x = 0; x < SIZE; x++) {
+                    if (!get(x, y, z).isAir()) {
+                        double s = 1.0 / SIZE;
+                        result = Shapes.or(result, Shapes.box(x * s, y * s, z * s, (x + 1) * s, (y + 1) * s, (z + 1) * s));
                     }
                 }
             }
         }
-        shape = SimpleVoxelShapeFactory.getSimpleVoxelShape(set);
-        if (world != null) {
-            BlockState state = world.getBlockState(pos);
-            if (fullcube) {
-                world.setBlockState(pos, states[0][0][0]);
+        cachedShape = result;
+        shapeDirty = false;
+        return result;
+    }
+
+    public static boolean inside(int x, int y, int z) {
+        return x >= 0 && y >= 0 && z >= 0 && x < SIZE && y < SIZE && z < SIZE;
+    }
+
+    @Override
+    protected void saveAdditional(ValueOutput output) {
+        Map<BlockState, Integer> paletteMap = new LinkedHashMap<>();
+        List<BlockState> palette = new ArrayList<>();
+        int[] indices = new int[COUNT];
+        for (int i = 0; i < COUNT; i++) {
+            BlockState state = bits[i];
+            Integer idx = paletteMap.get(state);
+            if (idx == null) {
+                idx = palette.size();
+                paletteMap.put(state, idx);
+                palette.add(state);
             }
-            int targetlight = MathHelper.clamp((int)(Math.sqrt(totalLight) * 0.0625 /*16/sqrt(4096)*/), 0, 16);
-            if (state.get(BitsBlock.LIGHT_LEVEL) != targetlight) {
-                world.setBlockState(pos, state.with(BitsBlock.LIGHT_LEVEL, targetlight), 0);
-            }
+            indices[i] = idx;
+        }
+        output.store("palette", BlockState.CODEC.listOf(), palette);
+        output.putIntArray("bits", indices);
+        super.saveAdditional(output);
+    }
+
+    @Override
+    protected void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
+        List<BlockState> palette = input.read("palette", BlockState.CODEC.listOf()).orElse(List.of(Blocks.AIR.defaultBlockState()));
+        int[] indices = input.getIntArray("bits").orElse(new int[0]);
+        for (int i = 0; i < COUNT; i++) {
+            int paletteIndex = i < indices.length ? indices[i] : 0;
+            bits[i] = paletteIndex >= 0 && paletteIndex < palette.size() ? palette.get(paletteIndex) : Blocks.AIR.defaultBlockState();
+        }
+        shapeDirty = true;
+    }
+
+    @Override
+    public net.minecraft.nbt.CompoundTag getUpdateTag(HolderLookup.Provider registryLookup) {
+        return saveWithoutMetadata(registryLookup);
+    }
+
+    @Override
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    @Override
+    public void setChanged() {
+        super.setChanged();
+        if (level != null) {
+            BlockState state = getBlockState();
+            level.sendBlockUpdated(worldPosition, state, state, Block.UPDATE_ALL);
         }
     }
-
-    @Environment(EnvType.CLIENT)
-    protected void rebuildMesh() {
-        mesh = BitMeshes.createMesh(states, world, pos);
-    }
-
-    public void postFromClientTag() {
-        rebuildMesh();
-        MinecraftClient.getInstance().worldRenderer.scheduleBlockRenders(pos.getX(), pos.getY(), pos.getZ(), pos.getX(), pos.getY(), pos.getZ());
-    }
-
-    @Override
-    public Packet<ClientPlayPacketListener> toUpdatePacket() {
-        return BlockEntityUpdateS2CPacket.create(this, be -> ((BitsBlockEntity)be).createNbt());
-    }
-
-    public void sync() {
-        markDirty();
-        ((ServerWorld) world).getChunkManager().markForUpdate(getPos());
-    }
-
-    // Begin crimes agains modding
-    @Override
-    public NbtCompound toInitialChunkDataNbt() {
-        sync();
-        return new NbtCompound();
-    }
-    // End crimes agains modding
-
-    @Environment(EnvType.CLIENT)
-    @Override
-    public @Nullable Object getRenderAttachmentData() {
-        return mesh;
-    }
-
 }
