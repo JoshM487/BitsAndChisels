@@ -21,12 +21,10 @@ import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
-import org.joml.Vector3f;
 
 import java.util.Arrays;
 import java.util.IdentityHashMap;
@@ -80,8 +78,9 @@ public final class BitsBlockEntityRenderer implements BlockEntityRenderer<BitsBl
         QuadEmitter output = ((FabricBlockModelRenderState) (Object) renderState.model)
             .setupMesh(new Matrix4f(), hasTranslucency);
 
-        Level level = blockEntity.getLevel();
-        BlockAndTintGetter view = level == null ? BlockAndTintGetter.EMPTY : level;
+        BlockAndTintGetter view = blockEntity.getLevel() instanceof net.minecraft.client.multiplayer.ClientLevel clientLevel
+            ? clientLevel
+            : BlockAndTintGetter.EMPTY;
         BlockPos pos = blockEntity.getBlockPos();
 
         emitGreedyFaces(bits, output, view, pos, translucency);
@@ -257,9 +256,9 @@ public final class BitsBlockEntityRenderer implements BlockEntityRenderer<BitsBl
         int axisA;
         int axisB;
         switch (face.getAxis()) {
-            case X -> { axisA = 1; axisB = 2; } // Y / Z
-            case Y -> { axisA = 0; axisB = 2; } // X / Z
-            case Z -> { axisA = 0; axisB = 1; } // X / Y
+            case X -> { axisA = 1; axisB = 2; }
+            case Y -> { axisA = 0; axisB = 2; }
+            case Z -> { axisA = 0; axisB = 1; }
             default -> throw new IllegalStateException();
         }
 
@@ -297,8 +296,6 @@ public final class BitsBlockEntityRenderer implements BlockEntityRenderer<BitsBl
             quad.multiplyColor(0xFF000000 | (tint & 0x00FFFFFF));
         }
 
-        // The tint is now baked into the vertex color. Leaving the tint index
-        // active would tint it a second time when the mesh is submitted.
         quad.tintIndex(-1);
     }
 
