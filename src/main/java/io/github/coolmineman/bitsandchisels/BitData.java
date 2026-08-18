@@ -22,6 +22,9 @@ public final class BitData {
     public static BlockState getState(ItemStack stack) {
         CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
         if (!tag.contains(BIT_STATE)) return Blocks.AIR.defaultBlockState();
-        return NbtUtils.readBlockState(BuiltInRegistries.BLOCK, tag.getCompound(BIT_STATE));
+        CompoundTag stateTag = tag.getCompound(BIT_STATE).orElse(null);
+        return stateTag == null
+            ? Blocks.AIR.defaultBlockState()
+            : NbtUtils.readBlockState(BuiltInRegistries.BLOCK, stateTag);
     }
 }

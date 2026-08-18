@@ -43,14 +43,17 @@ public final class BlueprintItem extends Item {
 
         Player player = context.getPlayer();
         if (player == null) return InteractionResult.PASS;
-        CompoundTag data = root.getCompound(BLUEPRINT);
+        CompoundTag data = root.getCompound(BLUEPRINT).orElse(null);
+        if (data == null) return InteractionResult.PASS;
         var target = context.getClickedPos().relative(context.getClickedFace());
         boolean changed = false;
 
         for (int i = 0; i < BitsBlockEntity.COUNT; i++) {
             String key = "s" + i;
             if (!data.contains(key)) continue;
-            BlockState state = NbtUtils.readBlockState(BuiltInRegistries.BLOCK, data.getCompound(key));
+            CompoundTag stateTag = data.getCompound(key).orElse(null);
+            if (stateTag == null) continue;
+            BlockState state = NbtUtils.readBlockState(BuiltInRegistries.BLOCK, stateTag);
             if (state.isAir()) continue;
 
             int x = i % 16;

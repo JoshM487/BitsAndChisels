@@ -59,7 +59,7 @@ public final class BitsBlockEntityRenderer implements BlockEntityRenderer<BitsBl
             matrices.pushPose();
             matrices.translate(bit.x() * scale, bit.y() * scale, bit.z() * scale);
             matrices.scale(scale, scale, scale);
-            bit.model().submitMultiLayer(matrices, queue, state.lightCoords, OverlayTexture.NO_OVERLAY, 0);
+            bit.model().submit(matrices, queue, state.lightCoords, OverlayTexture.NO_OVERLAY, 0);
             matrices.popPose();
         }
     }
